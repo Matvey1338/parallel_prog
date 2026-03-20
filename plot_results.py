@@ -101,13 +101,15 @@ def main():
     fig, ax1 = plt.subplots()
     ax1.set_xlabel('Размер матрицы N')
     ax1.set_ylabel('Время (сек)', color='tab:blue')
-    ax1.plot(sizes, times, 'bo-', linewidth=2, markersize=8, label='Время (факт)', color='tab:blue')
+    ax1.plot(sizes, times, 'o-', linewidth=2, markersize=8,
+             label='Время (факт)', color='tab:blue')
     ax1.tick_params(axis='y', labelcolor='tab:blue')
 
     if times[0] > 0:
         scale = times[0] / (sizes[0] ** 3)
         theoretical = [scale * (n ** 3) for n in sizes]
-        ax1.plot(sizes, theoretical, 'b--', alpha=0.4, linewidth=1.5, label='Теор. O(N³)')
+        ax1.plot(sizes, theoretical, '--', alpha=0.4, linewidth=1.5,
+                 label='Теор. O(N³)', color='tab:blue')
 
     ax1.legend(loc='upper left')
     ax1.set_title('Время выполнения vs теоретическая сложность O(N³)')
