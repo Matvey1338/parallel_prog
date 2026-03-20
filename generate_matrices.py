@@ -30,7 +30,7 @@ def main():
 
     print(f"Генерация матриц размером {n}x{n}...")
 
-    np.random.seed(42)  # для воспроизводимости
+    np.random.seed()
 
     generate_matrix("matrix_A.txt", n, use_int=use_int)
     generate_matrix("matrix_B.txt", n, use_int=use_int)
