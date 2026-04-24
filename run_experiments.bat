@@ -25,7 +25,7 @@ set STATS_FILE=experiment_results.csv
 echo threads,n,time_sec,gflop,gflop_s,memory_mb > %STATS_FILE%
 
 :: Цикл по потокам и размерам
-for %%T in (1 2 4 8) do (
+for %%T in (1 2 4 8 10 16 20) do (
     for %%N in (200 400 800 1200 1600 2000) do (
         echo ================================================
         echo   Потоки: %%T  ^|  N = %%N
