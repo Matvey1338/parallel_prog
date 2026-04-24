@@ -5,6 +5,7 @@
 #include <chrono>
 #include <iomanip>
 #include <windows.h>
+#include <omp.h>
 
 double* readMatrix(const char* filename, int& n) {
     std::ifstream fin(filename);
@@ -50,6 +51,7 @@ bool writeMatrix(const char* filename, const double* matrix, int n) {
 
 void multiplyMatrices_ikj(const double* A, const double* B, double* C, int n) {
     memset(C, 0, sizeof(double) * n * n);
+    #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         for (int k = 0; k < n; k++) {
             double a_ik = A[i * n + k];
@@ -67,6 +69,7 @@ int main(int argc, char* argv[]) {
     const char* fileB = "matrix_B.txt";
     const char* fileC = "matrix_C.txt";
     const char* fileStats = nullptr; // файл для записи статистики (опционально)
+    int numThreads = 1;
 
     if (argc >= 4) {
         fileA = argv[1];
@@ -76,10 +79,17 @@ int main(int argc, char* argv[]) {
     if (argc >= 5) {
         fileStats = argv[4];
     }
+    if (argc >= 6) {
+        numThreads = std::atoi(argv[5]);
+        if (numThreads < 1) numThreads = 1;
+    }
+
+    omp_set_num_threads(numThreads);
 
     std::cout << "============================================" << std::endl;
     std::cout << "  Перемножение квадратных матриц (i-k-j)    " << std::endl;
-    std::cout << "  Однопоточная реализация                   " << std::endl;
+    std::cout << "  Многопоточная реализация (OpenMP)         " << std::endl;
+    std::cout << "  Количество потоков: " << numThreads << "                  " << std::endl;
     std::cout << "============================================" << std::endl;
 
     int nA = 0, nB = 0;
@@ -130,6 +140,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "\n============ РЕЗУЛЬТАТЫ ============" << std::endl;
     std::cout << "Размер матрицы:       " << n << " x " << n << std::endl;
+    std::cout << "Количество потоков:   " << numThreads << std::endl;
     std::cout << "Время выполнения:     " << std::fixed << std::setprecision(6)
               << seconds << " сек" << std::endl;
     std::cout << "Объём задачи:         " << std::setprecision(3)
@@ -158,7 +169,8 @@ int main(int argc, char* argv[]) {
     if (fileStats) {
         std::ofstream fstat(fileStats, std::ios::app);
         if (fstat.is_open()) {
-            fstat << n << ","
+            fstat << numThreads << ","
+                  << n << ","
                   << std::fixed << std::setprecision(6) << seconds << ","
                   << std::setprecision(3) << gflops_total << ","
                   << std::setprecision(4) << gflops_per_sec << ","

@@ -3,6 +3,7 @@ import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 def main():
     csv_file = "experiment_results.csv"
@@ -13,12 +14,12 @@ def main():
         print(f"Файл {csv_file} не найден!")
         return
 
-    # Создаём папку data, если нет
     output_dir = "data"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Чтение CSV
-    sizes, times, gflops, gflops_s, memory = [], [], [], [], []
+    # Dictionary format: data[threads]["sizes"], data[threads]["times"], etc.
+    # We will use defaultdict of lists
+    data = defaultdict(lambda: {'sizes': [], 'times': [], 'gflops': [], 'gflops_s': [], 'memory': []})
 
     with open(csv_file, 'r') as f:
         f.readline()  # заголовок
@@ -27,13 +28,20 @@ def main():
             if not line:
                 continue
             parts = line.split(',')
-            sizes.append(int(parts[0]))
-            times.append(float(parts[1]))
-            gflops.append(float(parts[2]))
-            gflops_s.append(float(parts[3]))
-            memory.append(float(parts[4]))
+            threads = int(parts[0])
+            size = int(parts[1])
+            time_sec = float(parts[2])
+            gflop = float(parts[3])
+            gflop_s = float(parts[4])
+            memory_mb = float(parts[5])
 
-    if not sizes:
+            data[threads]['sizes'].append(size)
+            data[threads]['times'].append(time_sec)
+            data[threads]['gflops'].append(gflop)
+            data[threads]['gflops_s'].append(gflop_s)
+            data[threads]['memory'].append(memory_mb)
+
+    if not data:
         print("Нет данных!")
         return
 
@@ -44,15 +52,17 @@ def main():
         'figure.figsize': (10, 6)
     })
 
+    thread_counts = sorted(data.keys())
+    
     # === График 1: Время ===
     fig, ax = plt.subplots()
-    ax.plot(sizes, times, 'bo-', linewidth=2, markersize=8)
+    for t in thread_counts:
+        ax.plot(data[t]['sizes'], data[t]['times'], marker='o', linewidth=2, markersize=6, label=f'{t} потоков')
+    
     ax.set_xlabel('Размер матрицы N')
     ax.set_ylabel('Время выполнения (сек)')
-    ax.set_title('Зависимость времени умножения матриц от размера\n(однопоточная реализация, порядок i-k-j)')
-    for x, y in zip(sizes, times):
-        ax.annotate(f'{y:.3f}', (x, y), textcoords="offset points",
-                    xytext=(0, 12), ha='center', fontsize=9)
+    ax.set_title('Зависимость времени умножения матриц от размера\n(Многопоточная реализация, порядок i-k-j)')
+    ax.legend()
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'graph_time.png'), dpi=150)
     print(f"  Сохранён: {output_dir}/graph_time.png")
@@ -60,71 +70,57 @@ def main():
 
     # === График 2: GFLOP/s ===
     fig, ax = plt.subplots()
-    ax.plot(sizes, gflops_s, 'rs-', linewidth=2, markersize=8)
+    for t in thread_counts:
+        ax.plot(data[t]['sizes'], data[t]['gflops_s'], marker='s', linewidth=2, markersize=6, label=f'{t} потоков')
+        
     ax.set_xlabel('Размер матрицы N')
     ax.set_ylabel('Производительность (GFLOP/s)')
-    ax.set_title('Производительность умножения матриц\n(однопоточная реализация, порядок i-k-j)')
-
-    # Подсветка пика
-    peak_idx = gflops_s.index(max(gflops_s))
-    ax.annotate(f'пик: {gflops_s[peak_idx]:.2f}',
-                (sizes[peak_idx], gflops_s[peak_idx]),
-                textcoords="offset points", xytext=(15, 10),
-                ha='center', fontsize=10, fontweight='bold',
-                arrowprops=dict(arrowstyle='->', color='red'))
-
-    for i, (x, y) in enumerate(zip(sizes, gflops_s)):
-        if i != peak_idx:
-            ax.annotate(f'{y:.2f}', (x, y), textcoords="offset points",
-                        xytext=(0, 12), ha='center', fontsize=9)
+    ax.set_title('Производительность умножения матриц\n(Многопоточная реализация, порядок i-k-j)')
+    ax.legend()
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'graph_gflops.png'), dpi=150)
     print(f"  Сохранён: {output_dir}/graph_gflops.png")
     plt.close()
 
-    # === График 3: Память ===
-    fig, ax = plt.subplots()
-    ax.bar(range(len(sizes)), memory, color='green', alpha=0.7)
-    ax.set_xticks(range(len(sizes)))
-    ax.set_xticklabels([str(s) for s in sizes])
-    ax.set_xlabel('Размер матрицы N')
-    ax.set_ylabel('Память (МБ)')
-    ax.set_title('Потребление памяти (3 матрицы NxN, double)')
-    for i, y in enumerate(memory):
-        ax.text(i, y + 0.5, f'{y:.1f}', ha='center', fontsize=9)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'graph_memory.png'), dpi=150)
-    print(f"  Сохранён: {output_dir}/graph_memory.png")
-    plt.close()
-
-    # === График 4: Время vs O(N³) ===
-    fig, ax1 = plt.subplots()
-    ax1.set_xlabel('Размер матрицы N')
-    ax1.set_ylabel('Время (сек)', color='tab:blue')
-    ax1.plot(sizes, times, 'o-', linewidth=2, markersize=8,
-             label='Время (факт)', color='tab:blue')
-    ax1.tick_params(axis='y', labelcolor='tab:blue')
-
-    if times[0] > 0:
-        scale = times[0] / (sizes[0] ** 3)
-        theoretical = [scale * (n ** 3) for n in sizes]
-        ax1.plot(sizes, theoretical, '--', alpha=0.4, linewidth=1.5,
-                 label='Теор. O(N³)', color='tab:blue')
-
-    ax1.legend(loc='upper left')
-    ax1.set_title('Время выполнения vs теоретическая сложность O(N³)')
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'graph_combined.png'), dpi=150)
-    print(f"  Сохранён: {output_dir}/graph_combined.png")
-    plt.close()
+    # === График 3: Ускорение (Speedup) ===
+    # Speedup = T(1) / T(p)
+    if 1 in thread_counts:
+        fig, ax = plt.subplots()
+        t1_times = dict(zip(data[1]['sizes'], data[1]['times']))
+        
+        for t in thread_counts:
+            if t == 1:
+                continue
+            sizes_t = data[t]['sizes']
+            times_t = data[t]['times']
+            speedups = []
+            valid_sizes = []
+            
+            for s, time_p in zip(sizes_t, times_t):
+                if s in t1_times and t1_times[s] > 0 and time_p > 0:
+                    speedups.append(t1_times[s] / time_p)
+                    valid_sizes.append(s)
+            
+            if valid_sizes:
+                ax.plot(valid_sizes, speedups, marker='^', linewidth=2, markersize=6, label=f'{t} потоков')
+        
+        ax.set_xlabel('Размер матрицы N')
+        ax.set_ylabel('Ускорение (Speedup)')
+        ax.set_title('Ускорение от распараллеливания (Speedup = T1 / Tp)')
+        ax.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'graph_speedup.png'), dpi=150)
+        print(f"  Сохранён: {output_dir}/graph_speedup.png")
+        plt.close()
 
     # Таблица в консоль
-    print("\n" + "=" * 75)
-    print(f"{'N':>6} | {'Время (сек)':>12} | {'GFLOP':>8} | {'GFLOP/s':>8} | {'Память (МБ)':>12}")
-    print("-" * 75)
-    for i in range(len(sizes)):
-        print(f"{sizes[i]:>6} | {times[i]:>12.6f} | {gflops[i]:>8.3f} | {gflops_s[i]:>8.4f} | {memory[i]:>12.2f}")
-    print("=" * 75)
+    print("\n" + "=" * 85)
+    print(f"{'Потоки':>6} | {'N':>6} | {'Время (сек)':>12} | {'GFLOP':>8} | {'GFLOP/s':>8} | {'Память (МБ)':>12}")
+    print("-" * 85)
+    for t in thread_counts:
+        for i in range(len(data[t]['sizes'])):
+            print(f"{t:>6} | {data[t]['sizes'][i]:>6} | {data[t]['times'][i]:>12.6f} | {data[t]['gflops'][i]:>8.3f} | {data[t]['gflops_s'][i]:>8.4f} | {data[t]['memory'][i]:>12.2f}")
+    print("=" * 85)
 
 if __name__ == "__main__":
     main()
