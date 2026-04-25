@@ -1,3 +1,4 @@
+#include <mpi.h>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -48,25 +49,21 @@ bool writeMatrix(const char* filename, const double* matrix, int n) {
     return true;
 }
 
-void multiplyMatrices_ikj(const double* A, const double* B, double* C, int n) {
-    memset(C, 0, sizeof(double) * n * n);
-    for (int i = 0; i < n; i++) {
-        for (int k = 0; k < n; k++) {
-            double a_ik = A[i * n + k];
-            for (int j = 0; j < n; j++) {
-                C[i * n + j] += a_ik * B[k * n + j];
-            }
-        }
-    }
-}
-
 int main(int argc, char* argv[]) {
-    SetConsoleOutputCP(65001);
+    MPI_Init(&argc, &argv);
+
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (rank == 0) {
+        SetConsoleOutputCP(65001);
+    }
 
     const char* fileA = "matrix_A.txt";
     const char* fileB = "matrix_B.txt";
     const char* fileC = "matrix_C.txt";
-    const char* fileStats = nullptr; // файл для записи статистики (опционально)
+    const char* fileStats = nullptr;
 
     if (argc >= 4) {
         fileA = argv[1];
@@ -77,100 +74,149 @@ int main(int argc, char* argv[]) {
         fileStats = argv[4];
     }
 
-    std::cout << "============================================" << std::endl;
-    std::cout << "  Перемножение квадратных матриц (i-k-j)    " << std::endl;
-    std::cout << "  Однопоточная реализация                   " << std::endl;
-    std::cout << "============================================" << std::endl;
+    int n = 0;
+    double *A = nullptr;
+    double *B = nullptr;
+    double *C = nullptr;
 
-    int nA = 0, nB = 0;
+    if (rank == 0) {
+        std::cout << "============================================" << std::endl;
+        std::cout << "  Перемножение квадратных матриц (i-k-j)    " << std::endl;
+        std::cout << "  MPI реализация (процессов: " << size << ")     " << std::endl;
+        std::cout << "============================================" << std::endl;
 
-    std::cout << "\nЧтение матрицы A из файла: " << fileA << std::endl;
-    double* A = readMatrix(fileA, nA);
-    if (!A) return 1;
-
-    std::cout << "Чтение матрицы B из файла: " << fileB << std::endl;
-    double* B = readMatrix(fileB, nB);
-    if (!B) { delete[] A; return 1; }
-
-    if (nA != nB) {
-        std::cerr << "Ошибка: размеры матриц не совпадают ("
-                  << nA << " != " << nB << ")" << std::endl;
-        delete[] A; delete[] B;
-        return 1;
-    }
-
-    int n = nA;
-    std::cout << "Размер матриц: " << n << " x " << n << std::endl;
-
-    // Объём задачи
-    long long numOperations = 2LL * n * n * n;
-    double gflops_total = (double)numOperations / 1e9;
-    std::cout << "Объём задачи: " << numOperations << " операций ("
-              << std::fixed << std::setprecision(3) << gflops_total << " GFLOP)" << std::endl;
-
-    // Расчёт памяти: 3 матрицы по n*n элементов типа double
-    long long memoryBytes = 3LL * n * n * sizeof(double);
-    double memoryMB = (double)memoryBytes / (1024.0 * 1024.0);
-    std::cout << "Требуемая память: " << std::fixed << std::setprecision(2)
-              << memoryMB << " МБ (" << memoryBytes << " байт, "
-              << "3 матрицы " << n << "x" << n << " x "
-              << sizeof(double) << " байт/элемент)" << std::endl;
-
-    double* C = new double[n * n];
-
-    std::cout << "\nВыполняется умножение матриц..." << std::endl;
-
-    auto start = std::chrono::high_resolution_clock::now();
-    multiplyMatrices_ikj(A, B, C, n);
-    auto end = std::chrono::high_resolution_clock::now();
-
-    std::chrono::duration<double> elapsed = end - start;
-    double seconds = elapsed.count();
-    double gflops_per_sec = gflops_total / seconds;
-
-    std::cout << "\n============ РЕЗУЛЬТАТЫ ============" << std::endl;
-    std::cout << "Размер матрицы:       " << n << " x " << n << std::endl;
-    std::cout << "Время выполнения:     " << std::fixed << std::setprecision(6)
-              << seconds << " сек" << std::endl;
-    std::cout << "Объём задачи:         " << std::setprecision(3)
-              << gflops_total << " GFLOP" << std::endl;
-    std::cout << "Производительность:   " << std::setprecision(4)
-              << gflops_per_sec << " GFLOP/s" << std::endl;
-    std::cout << "Память:               " << std::setprecision(2)
-              << memoryMB << " МБ" << std::endl;
-
-    std::cout << "\nЗапись результата в файл: " << fileC << std::endl;
-    if (!writeMatrix(fileC, C, n)) {
-        delete[] A; delete[] B; delete[] C;
-        return 1;
-    }
-
-    int printSize = (n < 5) ? n : 5;
-    std::cout << "\nЛевый верхний угол матрицы C (" << printSize << "x" << printSize << "):" << std::endl;
-    for (int i = 0; i < printSize; i++) {
-        for (int j = 0; j < printSize; j++) {
-            std::cout << std::setw(12) << std::setprecision(4) << C[i * n + j];
+        int nA = 0, nB = 0;
+        std::cout << "\nЧтение матрицы A из файла: " << fileA << std::endl;
+        A = readMatrix(fileA, nA);
+        if (A) {
+            std::cout << "Чтение матрицы B из файла: " << fileB << std::endl;
+            B = readMatrix(fileB, nB);
+            if (B && nA != nB) {
+                std::cerr << "Ошибка: размеры матриц не совпадают (" << nA << " != " << nB << ")" << std::endl;
+                delete[] A; delete[] B;
+                A = nullptr; B = nullptr;
+            } else if (B) {
+                n = nA;
+                std::cout << "Размер матриц: " << n << " x " << n << std::endl;
+            }
         }
-        std::cout << std::endl;
-    }
-
-    // Если указан файл статистики — дописать строку в CSV
-    if (fileStats) {
-        std::ofstream fstat(fileStats, std::ios::app);
-        if (fstat.is_open()) {
-            fstat << n << ","
-                  << std::fixed << std::setprecision(6) << seconds << ","
-                  << std::setprecision(3) << gflops_total << ","
-                  << std::setprecision(4) << gflops_per_sec << ","
-                  << std::setprecision(2) << memoryMB << std::endl;
-            fstat.close();
+        if (!A || !B) {
+            n = -1; // Сигнал ошибки другим процессам
         }
     }
 
-    std::cout << "\nГотово!" << std::endl;
+    // Рассылаем размер матрицы всем процессам
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    delete[] A;
+    if (n <= 0) {
+        MPI_Finalize();
+        return 1;
+    }
+
+    if (rank != 0) {
+        B = new double[n * n];
+    }
+
+    // Рассылаем матрицу B целиком
+    MPI_Bcast(B, n * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Подготовка Scatterv и Gatherv
+    int* sendcounts = new int[size];
+    int* displs = new int[size];
+    int offset = 0;
+    for (int i = 0; i < size; i++) {
+        int rows = n / size + (i < n % size ? 1 : 0);
+        sendcounts[i] = rows * n;
+        displs[i] = offset;
+        offset += sendcounts[i];
+    }
+
+    int local_rows = n / size + (rank < n % size ? 1 : 0);
+    double* A_local = new double[local_rows * n];
+    double* C_local = new double[local_rows * n];
+    std::fill(C_local, C_local + local_rows * n, 0.0);
+
+    if (rank == 0) {
+        std::cout << "\nВыполняется умножение матриц..." << std::endl;
+        C = new double[n * n];
+    }
+
+    // Синхронизация перед началом отсчёта времени
+    MPI_Barrier(MPI_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
+    // Разделяем матрицу A по процессам
+    MPI_Scatterv(A, sendcounts, displs, MPI_DOUBLE, A_local, local_rows * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Локальное вычисление C_local
+    for (int i = 0; i < local_rows; i++) {
+        for (int k = 0; k < n; k++) {
+            double a_ik = A_local[i * n + k];
+            for (int j = 0; j < n; j++) {
+                C_local[i * n + j] += a_ik * B[k * n + j];
+            }
+        }
+    }
+
+    // Собираем результаты в матрицу C на нулевом процессе
+    MPI_Gatherv(C_local, local_rows * n, MPI_DOUBLE, C, sendcounts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    double end_time = MPI_Wtime();
+
+    if (rank == 0) {
+        double seconds = end_time - start_time;
+        long long numOperations = 2LL * n * n * n;
+        double gflops_total = (double)numOperations / 1e9;
+        double gflops_per_sec = gflops_total / seconds;
+        
+        long long memoryBytes = 3LL * n * n * sizeof(double);
+        double memoryMB = (double)memoryBytes / (1024.0 * 1024.0);
+
+        std::cout << "\n============ РЕЗУЛЬТАТЫ ============" << std::endl;
+        std::cout << "Размер матрицы:       " << n << " x " << n << std::endl;
+        std::cout << "Процессов (ядер):     " << size << std::endl;
+        std::cout << "Время выполнения:     " << std::fixed << std::setprecision(6) << seconds << " сек" << std::endl;
+        std::cout << "Объём задачи:         " << std::setprecision(3) << gflops_total << " GFLOP" << std::endl;
+        std::cout << "Производительность:   " << std::setprecision(4) << gflops_per_sec << " GFLOP/s" << std::endl;
+        std::cout << "Память (эквив. 1 пот.): " << std::setprecision(2) << memoryMB << " МБ" << std::endl;
+
+        std::cout << "\nЗапись результата в файл: " << fileC << std::endl;
+        if (!writeMatrix(fileC, C, n)) {
+            std::cerr << "Не удалось записать результат." << std::endl;
+        }
+
+        int printSize = (n < 5) ? n : 5;
+        std::cout << "\nЛевый верхний угол матрицы C (" << printSize << "x" << printSize << "):" << std::endl;
+        for (int i = 0; i < printSize; i++) {
+            for (int j = 0; j < printSize; j++) {
+                std::cout << std::setw(12) << std::setprecision(4) << C[i * n + j];
+            }
+            std::cout << std::endl;
+        }
+
+        if (fileStats) {
+            std::ofstream fstat(fileStats, std::ios::app);
+            if (fstat.is_open()) {
+                fstat << n << "," << size << ","
+                      << std::fixed << std::setprecision(6) << seconds << ","
+                      << std::setprecision(3) << gflops_total << ","
+                      << std::setprecision(4) << gflops_per_sec << ","
+                      << std::setprecision(2) << memoryMB << std::endl;
+                fstat.close();
+            }
+        }
+        std::cout << "\nГотово!" << std::endl;
+
+        delete[] A;
+        delete[] C;
+    }
+
     delete[] B;
-    delete[] C;
+    delete[] A_local;
+    delete[] C_local;
+    delete[] sendcounts;
+    delete[] displs;
+
+    MPI_Finalize();
     return 0;
 }
