@@ -10,8 +10,8 @@ echo ================================================
 echo.
 
 :: --- Компиляция ---
-echo [1/4] Компиляция matrix_mult.cpp ...
-g++ -O2 -o matrix_mult.exe matrix_mult.cpp
+echo [1/4] Компиляция matrix_mult.cu ...
+nvcc -O2 -o matrix_mult.exe matrix_mult.cu
 if %ERRORLEVEL% neq 0 (
     echo ОШИБКА компиляции!
     pause

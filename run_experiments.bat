@@ -10,8 +10,8 @@ echo.
 if not exist data mkdir data
 
 :: Компиляция
-echo [1] Компиляция matrix_mult.cpp ...
-g++ -O2 -o matrix_mult.exe matrix_mult.cpp
+echo [1] Компиляция matrix_mult.cu ...
+nvcc -O2 -o matrix_mult.exe matrix_mult.cu
 if %ERRORLEVEL% neq 0 (
     echo ОШИБКА компиляции!
     pause
@@ -22,7 +22,7 @@ echo.
 
 :: Очистка файла статистики
 set STATS_FILE=experiment_results.csv
-echo n,time_sec,gflop,gflop_s,memory_mb > %STATS_FILE%
+echo n,block_size,time_sec,gflop,gflop_s,memory_mb > %STATS_FILE%
 
 :: Цикл по размерам
 for %%N in (200 400 800 1200 1600 2000) do (
@@ -32,9 +32,11 @@ for %%N in (200 400 800 1200 1600 2000) do (
 
     python generate_matrices.py %%N
 
-    matrix_mult.exe matrix_A.txt matrix_B.txt matrix_C.txt %STATS_FILE%
-
-    python verify.py
+    for %%B in (8 16 32) do (
+        echo   -- Блок: %%B x %%B --
+        matrix_mult.exe matrix_A.txt matrix_B.txt matrix_C.txt %STATS_FILE% %%B
+        python verify.py
+    )
 
     echo   --- %%N завершено ---
     echo.
