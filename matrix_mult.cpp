@@ -3,26 +3,25 @@
 #include <fstream>
 #include <cstdlib>
 #include <cstring>
-#include <chrono>
 #include <iomanip>
 
 double* readMatrix(const char* filename, int& n) {
     std::ifstream fin(filename);
     if (!fin.is_open()) {
         std::cerr << "Error: could not open file " << filename << std::endl;
-        return nullptr;
+        return NULL;
     }
     fin >> n;
     if (n <= 0) {
         std::cerr << "Error: invalid matrix size in file " << filename << std::endl;
-        return nullptr;
+        return NULL;
     }
     double* matrix = new double[n * n];
     for (int i = 0; i < n * n; i++) {
         if (!(fin >> matrix[i])) {
             std::cerr << "Error: insufficient data in file " << filename << std::endl;
             delete[] matrix;
-            return nullptr;
+            return NULL;
         }
     }
     fin.close();
@@ -58,7 +57,7 @@ int main(int argc, char* argv[]) {
     const char* fileA = "matrix_A.txt";
     const char* fileB = "matrix_B.txt";
     const char* fileC = "matrix_C.txt";
-    const char* fileStats = nullptr;
+    const char* fileStats = NULL;
 
     if (argc >= 4) {
         fileA = argv[1];
@@ -70,9 +69,9 @@ int main(int argc, char* argv[]) {
     }
 
     int n = 0;
-    double *A = nullptr;
-    double *B = nullptr;
-    double *C = nullptr;
+    double *A = NULL;
+    double *B = NULL;
+    double *C = NULL;
 
     if (rank == 0) {
         std::cout << "============================================" << std::endl;
@@ -89,7 +88,7 @@ int main(int argc, char* argv[]) {
             if (B && nA != nB) {
                 std::cerr << "Error: matrix dimensions do not match (" << nA << " != " << nB << ")" << std::endl;
                 delete[] A; delete[] B;
-                A = nullptr; B = nullptr;
+                A = NULL; B = NULL;
             } else if (B) {
                 n = nA;
                 std::cout << "Matrix size: " << n << " x " << n << std::endl;
@@ -129,7 +128,9 @@ int main(int argc, char* argv[]) {
     int local_rows = n / size + (rank < n % size ? 1 : 0);
     double* A_local = new double[local_rows * n];
     double* C_local = new double[local_rows * n];
-    std::fill(C_local, C_local + local_rows * n, 0.0);
+    for (int i = 0; i < local_rows * n; i++) {
+        C_local[i] = 0.0;
+    }
 
     if (rank == 0) {
         std::cout << "\nPerforming matrix multiplication..." << std::endl;
@@ -160,11 +161,11 @@ int main(int argc, char* argv[]) {
 
     if (rank == 0) {
         double seconds = end_time - start_time;
-        long long numOperations = 2LL * n * n * n;
+        long long numOperations = (long long)2 * n * n * n;
         double gflops_total = (double)numOperations / 1e9;
         double gflops_per_sec = gflops_total / seconds;
         
-        long long memoryBytes = 3LL * n * n * sizeof(double);
+        long long memoryBytes = (long long)3 * n * n * sizeof(double);
         double memoryMB = (double)memoryBytes / (1024.0 * 1024.0);
 
         std::cout << "\n============= RESULTS ==============" << std::endl;
