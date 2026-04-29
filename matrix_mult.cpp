@@ -50,6 +50,7 @@ bool writeMatrix(const char* filename, const double* matrix, int n) {
 }
 
 int main(int argc, char* argv[]) {
+    SetConsoleOutputCP(65001);
     MPI_Init(&argc, &argv);
 
     int rank, size;
