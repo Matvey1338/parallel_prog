@@ -5,23 +5,22 @@
 #include <cstring>
 #include <chrono>
 #include <iomanip>
-#include <windows.h>
 
 double* readMatrix(const char* filename, int& n) {
     std::ifstream fin(filename);
     if (!fin.is_open()) {
-        std::cerr << "Ошибка: не удалось открыть файл " << filename << std::endl;
+        std::cerr << "Error: could not open file " << filename << std::endl;
         return nullptr;
     }
     fin >> n;
     if (n <= 0) {
-        std::cerr << "Ошибка: некорректный размер матрицы в файле " << filename << std::endl;
+        std::cerr << "Error: invalid matrix size in file " << filename << std::endl;
         return nullptr;
     }
     double* matrix = new double[n * n];
     for (int i = 0; i < n * n; i++) {
         if (!(fin >> matrix[i])) {
-            std::cerr << "Ошибка: недостаточно данных в файле " << filename << std::endl;
+            std::cerr << "Error: insufficient data in file " << filename << std::endl;
             delete[] matrix;
             return nullptr;
         }
@@ -33,7 +32,7 @@ double* readMatrix(const char* filename, int& n) {
 bool writeMatrix(const char* filename, const double* matrix, int n) {
     std::ofstream fout(filename);
     if (!fout.is_open()) {
-        std::cerr << "Ошибка: не удалось создать файл " << filename << std::endl;
+        std::cerr << "Error: could not create file " << filename << std::endl;
         return false;
     }
     fout << n << std::endl;
@@ -50,16 +49,11 @@ bool writeMatrix(const char* filename, const double* matrix, int n) {
 }
 
 int main(int argc, char* argv[]) {
-    SetConsoleOutputCP(65001);
     MPI_Init(&argc, &argv);
 
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-    if (rank == 0) {
-        SetConsoleOutputCP(65001);
-    }
 
     const char* fileA = "matrix_A.txt";
     const char* fileB = "matrix_B.txt";
@@ -82,31 +76,31 @@ int main(int argc, char* argv[]) {
 
     if (rank == 0) {
         std::cout << "============================================" << std::endl;
-        std::cout << "  Перемножение квадратных матриц (i-k-j)    " << std::endl;
-        std::cout << "  MPI реализация (процессов: " << size << ")     " << std::endl;
+        std::cout << "  Square Matrix Multiplication (i-k-j)      " << std::endl;
+        std::cout << "  MPI Implementation (processes: " << size << ") " << std::endl;
         std::cout << "============================================" << std::endl;
 
         int nA = 0, nB = 0;
-        std::cout << "\nЧтение матрицы A из файла: " << fileA << std::endl;
+        std::cout << "\nReading matrix A from file: " << fileA << std::endl;
         A = readMatrix(fileA, nA);
         if (A) {
-            std::cout << "Чтение матрицы B из файла: " << fileB << std::endl;
+            std::cout << "Reading matrix B from file: " << fileB << std::endl;
             B = readMatrix(fileB, nB);
             if (B && nA != nB) {
-                std::cerr << "Ошибка: размеры матриц не совпадают (" << nA << " != " << nB << ")" << std::endl;
+                std::cerr << "Error: matrix dimensions do not match (" << nA << " != " << nB << ")" << std::endl;
                 delete[] A; delete[] B;
                 A = nullptr; B = nullptr;
             } else if (B) {
                 n = nA;
-                std::cout << "Размер матриц: " << n << " x " << n << std::endl;
+                std::cout << "Matrix size: " << n << " x " << n << std::endl;
             }
         }
         if (!A || !B) {
-            n = -1; // Сигнал ошибки другим процессам
+            n = -1; // Error signal to other processes
         }
     }
 
-    // Рассылаем размер матрицы всем процессам
+    // Broadcast matrix size to all processes
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (n <= 0) {
@@ -118,10 +112,10 @@ int main(int argc, char* argv[]) {
         B = new double[n * n];
     }
 
-    // Рассылаем матрицу B целиком
+    // Broadcast matrix B completely
     MPI_Bcast(B, n * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    // Подготовка Scatterv и Gatherv
+    // Preparation for Scatterv and Gatherv
     int* sendcounts = new int[size];
     int* displs = new int[size];
     int offset = 0;
@@ -138,18 +132,18 @@ int main(int argc, char* argv[]) {
     std::fill(C_local, C_local + local_rows * n, 0.0);
 
     if (rank == 0) {
-        std::cout << "\nВыполняется умножение матриц..." << std::endl;
+        std::cout << "\nPerforming matrix multiplication..." << std::endl;
         C = new double[n * n];
     }
 
-    // Синхронизация перед началом отсчёта времени
+    // Synchronization before starting the timer
     MPI_Barrier(MPI_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    // Разделяем матрицу A по процессам
+    // Scatter matrix A across processes
     MPI_Scatterv(A, sendcounts, displs, MPI_DOUBLE, A_local, local_rows * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    // Локальное вычисление C_local
+    // Local computation of C_local
     for (int i = 0; i < local_rows; i++) {
         for (int k = 0; k < n; k++) {
             double a_ik = A_local[i * n + k];
@@ -159,7 +153,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Собираем результаты в матрицу C на нулевом процессе
+    // Gather results into matrix C on the root process
     MPI_Gatherv(C_local, local_rows * n, MPI_DOUBLE, C, sendcounts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     double end_time = MPI_Wtime();
@@ -173,21 +167,21 @@ int main(int argc, char* argv[]) {
         long long memoryBytes = 3LL * n * n * sizeof(double);
         double memoryMB = (double)memoryBytes / (1024.0 * 1024.0);
 
-        std::cout << "\n============ РЕЗУЛЬТАТЫ ============" << std::endl;
-        std::cout << "Размер матрицы:       " << n << " x " << n << std::endl;
-        std::cout << "Процессов (ядер):     " << size << std::endl;
-        std::cout << "Время выполнения:     " << std::fixed << std::setprecision(6) << seconds << " сек" << std::endl;
-        std::cout << "Объём задачи:         " << std::setprecision(3) << gflops_total << " GFLOP" << std::endl;
-        std::cout << "Производительность:   " << std::setprecision(4) << gflops_per_sec << " GFLOP/s" << std::endl;
-        std::cout << "Память (эквив. 1 пот.): " << std::setprecision(2) << memoryMB << " МБ" << std::endl;
+        std::cout << "\n============= RESULTS ==============" << std::endl;
+        std::cout << "Matrix size:          " << n << " x " << n << std::endl;
+        std::cout << "Processes (cores):    " << size << std::endl;
+        std::cout << "Execution time:       " << std::fixed << std::setprecision(6) << seconds << " sec" << std::endl;
+        std::cout << "Task volume:          " << std::setprecision(3) << gflops_total << " GFLOP" << std::endl;
+        std::cout << "Performance:          " << std::setprecision(4) << gflops_per_sec << " GFLOP/s" << std::endl;
+        std::cout << "Memory (eq. 1 thread):" << std::setprecision(2) << memoryMB << " MB" << std::endl;
 
-        std::cout << "\nЗапись результата в файл: " << fileC << std::endl;
+        std::cout << "\nWriting result to file: " << fileC << std::endl;
         if (!writeMatrix(fileC, C, n)) {
-            std::cerr << "Не удалось записать результат." << std::endl;
+            std::cerr << "Failed to write result." << std::endl;
         }
 
         int printSize = (n < 5) ? n : 5;
-        std::cout << "\nЛевый верхний угол матрицы C (" << printSize << "x" << printSize << "):" << std::endl;
+        std::cout << "\nTop-left corner of matrix C (" << printSize << "x" << printSize << "):" << std::endl;
         for (int i = 0; i < printSize; i++) {
             for (int j = 0; j < printSize; j++) {
                 std::cout << std::setw(12) << std::setprecision(4) << C[i * n + j];
@@ -206,7 +200,7 @@ int main(int argc, char* argv[]) {
                 fstat.close();
             }
         }
-        std::cout << "\nГотово!" << std::endl;
+        std::cout << "\nDone!" << std::endl;
 
         delete[] A;
         delete[] C;
