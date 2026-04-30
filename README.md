@@ -11,13 +11,15 @@
 Работа с суперкомпьютером "Сергей Королёв" осуществляется через SSH-клиент (например, PuTTY) и менеджер файлов (WinSCP).
 Исходные файлы загружаются на кластер, после чего программа компилируется:
 
-`mpicxx -std=c++11 matrix_mult.cpp -o matrix_mult`
+`mpicxx matrix_mult.cpp -o matrix_mult`
 
 Запуск в очередь производится через сформированный `.pbs` файл.
 
-![Скриншот файлов](data/placeholder_files.png)
+![Файлы в WinSCP](screens/winscp.png)
 
-![Скриншот запуска](data/placeholder_run.png)
+![Терминал](screens/terminal.png)
+
+![Вывод с суперкомпьютера](screens/sk.png)
 
 ### Краткое описание работы `matrix_mult.cpp`
 
